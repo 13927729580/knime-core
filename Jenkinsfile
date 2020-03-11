@@ -15,12 +15,44 @@ properties([
 
 try {
 	knimetools.defaultTychoBuild('org.knime.update.core')
+   
+    stage('Integrated Workflow tests') {
+            node('maven'){
+            env.lastStage = env.STAGE_NAME
 
-	/* workflowTests.runTests( */
-	/* 	"org.knime.features.core.testing.feature.group", */
-	/* 	false, */
-	/* 	["knime-core", "knime-shared", "knime-tp"], */
-	/* ) */
+			checkout scm
+            withMavenJarsignerCredentials(options: [artifactsPublisher(disabled: true)]) {
+                withCredentials([usernamePassword(credentialsId: 'ARTIFACTORY_CREDENTIALS', passwordVariable: 'ARTIFACTORY_PASSWORD', usernameVariable: 'ARTIFACTORY_LOGIN')]) {
+                    sh '''
+                        export TEMP="${WORKSPACE}/tmp"
+                        rm -rf "${TEMP}"; mkdir "${TEMP}"
+                        
+                        XVFB=$(which Xvfb) || true
+                        if [[ -x "$XVFB" ]]; then
+                            Xvfb :$$ -pixdepths 24 -screen 0 1280x1024x24 +extension RANDR &
+                            XVFB_PID=$!
+                            export DISPLAY=:$$
+                        fi
+                        
+                        mvn -Dmaven.test.failure.ignore=true -Dknime.p2.repo=${P2_REPO} clean verify -P test
+                        rm -rf "${TEMP}"
+                        if [[ -n "$XVFB_PID" ]]; then
+                            kill $XVFB_PID
+                        fi
+                    '''
+                }
+            }
+            junit allowEmptyResults: true, testResults: '**/target/surefire-reports/TEST-*.xml'
+        }
+     }
+
+    workflowTests.runTests(
+        dependencies: [
+            repositories: ['knime-core', 'knime-json', 'knime-python'],
+            ius: ['']
+        ],
+        withAssertions: true
+    )
 
 	stage('Sonarqube analysis') {
 		env.lastStage = env.STAGE_NAME
