@@ -862,6 +862,60 @@ public class DataContainerTest extends TestCase {
     }
 
     /**
+     * Tests that when a table is created, (partly) iterated over and cleared, no memory alert listeners remain
+     * unregistered.
+     *
+     * @throws InterruptedException thrown when the thread is unexpectedly interrupted during sleep
+     */
+    @Test(timeout = 5000)
+    public void testNoDanglingMemoryAlertListeners() throws InterruptedException {
+        // send memory alerts to unregister any current memory alert listeners; invoke GC to free up memory
+        MemoryAlertSystem.getInstance().sendMemoryAlert();
+        MemoryAlertSystem.getInstanceUncollected().sendMemoryAlert();
+        MemoryAlertSystemTest.forceGC();
+        while (MemoryAlertSystem.getNumberOfListeners() != 0) {
+            MemoryAlertSystemTest.forceGC();
+            Thread.sleep(10);
+        }
+
+        final long numberOfListeners = MemoryAlertSystem.getNumberOfListeners();
+
+        // create tables and iterators
+        final Buffer smallSizedTable = DataContainerTest.generateSmallSizedTable();
+        smallSizedTable.iterator().next();
+        final Buffer mediumSizedTable = DataContainerTest.generateMediumSizedTable();
+        mediumSizedTable.iterator().next();
+
+        long numberOfNewListeners = MemoryAlertSystem.getNumberOfListeners() - numberOfListeners;
+        Assert.assertTrue("The amount of memory alert listeners did not increase", numberOfNewListeners > 0);
+
+        // clear table synchronously via performClear, since clear could be asynchronous
+        smallSizedTable.performClear();
+        mediumSizedTable.performClear();
+
+        numberOfNewListeners = MemoryAlertSystem.getNumberOfListeners() - numberOfListeners;
+        Assert.assertTrue(
+            String.format("The amount of memory alert listeners has increased by %s.", numberOfNewListeners),
+            numberOfNewListeners <= 0);
+    }
+
+    /**
+     * Generate a small-sized table. Medium-sized means smaller than a container's maximum number of cells.
+     *
+     * @return a small-sized tables
+     */
+    static Buffer generateSmallSizedTable() {
+        // in particular, we simply instantiate a tiny container and add a slighlty larger number of rows to it
+        final DataContainer container = new DataContainer(SPEC_STR_INT_DBL, true, 20, false);
+        final int count = 5;
+        for (RowIterator it = generateRows(count); it.hasNext();) {
+            container.addRowToTable(it.next());
+        }
+        container.close();
+        return container.getBufferedTable().getBuffer();
+    }
+
+    /**
      * Generate a medium-sized table. Medium-sized means larger than a container's maximum number of cells, but smaller
      * than Java heap space.
      *
