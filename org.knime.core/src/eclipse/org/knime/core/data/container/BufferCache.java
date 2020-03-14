@@ -185,7 +185,7 @@ final class BufferCache {
 
         /** We already fill the soft cache here to keep track of how recently the table has been used. Note that soft
          * and weak references won't be cleared while there is still a hard reference on the object. */
-        putIntoLRUCache(uniqueId, unmodifiableList);
+        putIntoLRUCache(buffer, uniqueId, unmodifiableList);
 
         final WeakReference<List<BlobSupportDataRow>> previousValue = m_weakCache.put(uniqueId,
             new WeakReference<List<BlobSupportDataRow>>(unmodifiableList, m_weakCacheRefQueue));
@@ -194,7 +194,7 @@ final class BufferCache {
         }
     }
 
-    private void putIntoLRUCache(final long uniqueId, final List<BlobSupportDataRow> list) {
+    private void putIntoLRUCache(final Buffer buffer, final long uniqueId, final List<BlobSupportDataRow> list) {
         final MemoryAlertSystem mas = MemoryAlertSystem.getInstanceUncollected();
         if (!mas.isMemoryLow()) {
             m_LRUCache.put(uniqueId, new SoftReference<List<BlobSupportDataRow>>(list));
@@ -203,13 +203,15 @@ final class BufferCache {
              * would block memory despite memory alerts. This could lead to a scenario where new buffers are always
              * flushed to disk and old buffers are kept in the LRU cache indefinitely.
              */
-            mas.addListener(new MemoryAlertListener() {
+            final MemoryAlertListener mal = new MemoryAlertListener() {
                 @Override
                 protected boolean memoryAlert(final MemoryAlert alert) {
                     m_LRUCache.remove(uniqueId);
                     return true;
                 }
-            });
+            };
+            mas.addListener(mal);
+            buffer.m_memoryAlertListeners.get(mas).add(mal);
         }
     }
 
@@ -307,7 +309,7 @@ final class BufferCache {
         if (list != null) {
             /** Make sure to put the accessed table back into the LRU cache. */
         	if (!m_LRUCache.containsKey(uniqueId)) {
-        	    putIntoLRUCache(uniqueId, list);
+        	    putIntoLRUCache(buffer, uniqueId, list);
         	}
             if (!hit) {
                 m_nWeakHits++;

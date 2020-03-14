@@ -62,6 +62,7 @@ import java.lang.reflect.Field;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -548,6 +549,12 @@ public class Buffer implements KNIMEStreamConstants {
     /** Dummy object for the file iterator map. */
     private static final Object DUMMY = new Object();
 
+    /**
+     * Memory alert listeners (by memory alert system) that look at this buffer. Need to unregister them when the node
+     * is reset.
+     */
+    final Map<MemoryAlertSystem, Collection<MemoryAlertListener>> m_memoryAlertListeners;
+
     /** Number of open file input streams on m_binFile. */
     private AtomicInteger m_nrOpenInputStreams = new AtomicInteger();
 
@@ -626,6 +633,9 @@ public class Buffer implements KNIMEStreamConstants {
         m_maxRowsInMem = maxRowsInMemory;
         m_lifecycle = m_bufferSettings.useLRU() ? new SoftRefLRULifecycle() : new MemorizeIfSmallLifecycle();
         m_openIteratorSet = new WeakHashMap<>();
+        m_memoryAlertListeners = new HashMap<>();
+        m_memoryAlertListeners.put(MemoryAlertSystem.getInstance(), new ArrayList<>());
+        m_memoryAlertListeners.put(MemoryAlertSystem.getInstanceUncollected(), new ArrayList<>());
         CACHE.setLRUCacheSize(m_bufferSettings.getLRUCacheSize());
         /**
          * independent of the lifecycle, if maxRowsInMemory is zero, the buffer is expected to flush to disk (e.g, see
@@ -688,6 +698,9 @@ public class Buffer implements KNIMEStreamConstants {
         m_blobDir = blobDir;
         m_bufferID = bufferID;
         m_openIteratorSet = new WeakHashMap<>();
+        m_memoryAlertListeners = new HashMap<>();
+        m_memoryAlertListeners.put(MemoryAlertSystem.getInstance(), new ArrayList<>());
+        m_memoryAlertListeners.put(MemoryAlertSystem.getInstanceUncollected(), new ArrayList<>());
         if (dataRepository == null) {
             LOGGER
                 .debug("no data repository set, using new instance of " + NotInWorkflowDataRepository.class.getName());
@@ -1982,6 +1995,11 @@ public class Buffer implements KNIMEStreamConstants {
                 }
                 m_binFile = null;
                 m_blobDir = null;
+
+                for (Entry<MemoryAlertSystem, Collection<MemoryAlertListener>> e : m_memoryAlertListeners.entrySet()) {
+                    e.getKey().removeListeners(e.getValue());
+                }
+
             }
         }
     }
@@ -2255,8 +2273,11 @@ public class Buffer implements KNIMEStreamConstants {
             final BackIntoMemoryIterator backIntoMemoryIterator, final ExecutionMonitor exec) {
             super(list, 0, (int) size() - 1, exec);
             m_backIntoMemoryIterator = backIntoMemoryIterator;
-            MemoryAlertSystem.getInstanceUncollected()
-                .addListener(new BackIntoMemoryIteratorDropper(FromListIterator.this));
+            final MemoryAlertSystem mas = MemoryAlertSystem.getInstanceUncollected();
+            final MemoryAlertListener backIntoMemoryIteratorDropper =
+                new BackIntoMemoryIteratorDropper(FromListIterator.this);
+            m_memoryAlertListeners.get(mas).add(backIntoMemoryIteratorDropper);
+            mas.addListener(backIntoMemoryIteratorDropper);
         }
 
         private void dropBackIntoMemoryIterator() {
@@ -2597,19 +2618,14 @@ public class Buffer implements KNIMEStreamConstants {
             assert Thread.holdsLock(Buffer.this);
 
             m_memoryAlertListener = new BufferFlusher(Buffer.this);
-            MemoryAlertSystem.getInstance().addListener(m_memoryAlertListener);
+            final MemoryAlertSystem mas = MemoryAlertSystem.getInstance();
+            m_memoryAlertListeners.get(mas).add(m_memoryAlertListener);
+            mas.addListener(m_memoryAlertListener);
         }
 
         @Override
         public void onClear() {
-            assert Thread.holdsLock(Buffer.this);
-
-            if (m_memoryAlertListener != null) {
-                MemoryAlertSystem.getInstance().removeListener(m_memoryAlertListener);
-                m_memoryAlertListener = null;
-            }
-
-            performClear();
+        	performClear();
         }
 
         @Override
@@ -2637,6 +2653,9 @@ public class Buffer implements KNIMEStreamConstants {
                             return true;
                         }
                     };
+                    final MemoryAlertSystem mas = MemoryAlertSystem.getInstance();
+                    m_memoryAlertListeners.get(mas).add(m_memoryAlertListener);
+                    mas.addListener(m_memoryAlertListener);
                 }
             }
         }
@@ -2663,8 +2682,6 @@ public class Buffer implements KNIMEStreamConstants {
          */
         private boolean m_fitsIntoMemory = false;
 
-        private MemoryAlertListener m_memoryAlertListener;
-
         /**
          * The object that represent the pending task of writing a full table from memory to disk.
          */
@@ -2683,8 +2700,10 @@ public class Buffer implements KNIMEStreamConstants {
             setRestoreIntoMemoryOnCacheMiss();
 
             if (size() <= m_maxRowsInMem) {
-                m_memoryAlertListener = new BufferFlusher(Buffer.this);
-                MemoryAlertSystem.getInstanceUncollected().addListener(m_memoryAlertListener);
+                final MemoryAlertListener bufferFlusher = new BufferFlusher(Buffer.this);
+                final MemoryAlertSystem mas = MemoryAlertSystem.getInstance();
+                m_memoryAlertListeners.get(mas).add(bufferFlusher);
+                mas.addListener(bufferFlusher);
             } else {
                 /**
                  * We'd like to flush early so that we can garbage-collect if memory becomes critical and we don't run out
@@ -2704,13 +2723,8 @@ public class Buffer implements KNIMEStreamConstants {
         @Override
         public void onClear() {
             assert Thread.holdsLock(Buffer.this);
-
+            
             performClear();
-
-            if (m_memoryAlertListener != null) {
-                MemoryAlertSystem.getInstanceUncollected().removeListener(m_memoryAlertListener);
-                m_memoryAlertListener = null;
-            }
 
             if (m_asyncAddFuture != null && !m_asyncAddFuture.isDone()) {
                 /**
