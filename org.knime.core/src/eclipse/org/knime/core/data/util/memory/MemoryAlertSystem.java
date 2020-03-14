@@ -303,7 +303,7 @@ public final class MemoryAlertSystem {
     }
 
     /**
-     * Removes a registered listener,
+     * Removes a registered listener.
      *
      * @param listener a listener
      * @return <code>true</code> if the listener was removed, <code>false</code> otherwise
@@ -311,6 +311,19 @@ public final class MemoryAlertSystem {
     public boolean removeListener(final MemoryAlertListener listener) {
         synchronized (m_listeners) {
             return m_listeners.remove(listener);
+        }
+    }
+
+    /**
+     * Removes registered listeners
+     *
+     * @param listener a listener
+     * @return <code>true</code> if the listener was removed, <code>false</code> otherwise
+     * @since 4.2
+     */
+    public boolean removeListeners(final Collection<MemoryAlertListener> listener) {
+        synchronized (m_listeners) {
+            return m_listeners.removeAll(listener);
         }
     }
 
