@@ -1954,10 +1954,6 @@ public class Buffer implements KNIMEStreamConstants {
 
     /** Clears the temp file. Any subsequent iteration will fail! */
     synchronized void clear() {
-        m_lifecycle.onClear();
-    }
-
-    void performClear() {
         /** lock clear flag to prevent concurrent clearing or asynchronous writing to this buffer */
         synchronized (m_isClearedLock) {
             if (!m_isClearedLock.booleanValue()) {
@@ -2002,6 +1998,8 @@ public class Buffer implements KNIMEStreamConstants {
 
             }
         }
+
+        m_lifecycle.onClear();
     }
 
     private static final int MAX_FILES_TO_CREATE_BEFORE_GC = 10000;
@@ -2563,7 +2561,7 @@ public class Buffer implements KNIMEStreamConstants {
         void onCloseIfCached();
 
         /**
-         * Synchronously called before clearing this buffer.
+         * Synchronously called after clearing this buffer.
          */
         void onClear();
 
@@ -2625,7 +2623,6 @@ public class Buffer implements KNIMEStreamConstants {
 
         @Override
         public void onClear() {
-        	performClear();
         }
 
         @Override
@@ -2723,8 +2720,6 @@ public class Buffer implements KNIMEStreamConstants {
         @Override
         public void onClear() {
             assert Thread.holdsLock(Buffer.this);
-            
-            performClear();
 
             if (m_asyncAddFuture != null && !m_asyncAddFuture.isDone()) {
                 /**
