@@ -56,10 +56,10 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.MemoryType;
 import java.lang.management.MemoryUsage;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -172,7 +172,7 @@ public final class MemoryAlertSystem {
      */
     private static final int CHECK_HEAP_SIZE_INTERVAL = 5;
 
-    private final Collection<MemoryAlertListener> m_listeners = new ArrayList<>();
+    private final Collection<MemoryAlertListener> m_listeners = new LinkedHashSet<>();
 
     private final MemoryPoolMXBean m_memPool = OLD_GEN_POOL;
 
