@@ -17,7 +17,7 @@ try {
 	knimetools.defaultTychoBuild('org.knime.update.core')
    
     stage('Integrated Workflow tests') {
-            node('maven'){
+            node('workflowtests && ubuntu18.04'){ // TODO add other platforms
             env.lastStage = env.STAGE_NAME
 
 			checkout scm
