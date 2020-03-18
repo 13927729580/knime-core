@@ -14,10 +14,12 @@ properties([
 ])
 
 try {
-	knimetools.defaultTychoBuild('org.knime.update.core')
-   
-    stage('Integrated Workflow tests') {
-            node('workflowtests && ubuntu18.04'){ // TODO add other platforms
+    parallel (
+        'Tycho Build': {
+	        knimetools.defaultTychoBuild('org.knime.update.core')
+        },
+        'Integrated Workflow tests': {
+            node('workflow-tests && ubuntu18.04'){ // TODO add other platforms
             env.lastStage = env.STAGE_NAME
 
 			checkout scm
@@ -44,7 +46,7 @@ try {
             }
             junit allowEmptyResults: true, testResults: '**/target/surefire-reports/TEST-*.xml'
         }
-     }
+     })
 
     workflowTests.runTests(
         dependencies: [
