@@ -13,7 +13,7 @@
 	<packaging>eclipse-test-plugin</packaging>
 
 	<properties>
-		<surefireArgLine>-Dswing.systemlaf=javax.swing.plaf.nimbus.NimbusLookAndFeel</surefireArgLine>
+		<surefireArgLine>-Dswing.systemlaf=javax.swing.plaf.nimbus.NimbusLookAndFeel -XX:CompileCommand=exclude,javax/swing/text/GlyphView,getBreakSpot</surefireArgLine>
 	</properties>
 
 	<repositories>
