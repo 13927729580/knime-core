@@ -37,7 +37,7 @@ try {
                                 export DISPLAY=:$$
                             fi
                         
-                            mvn -Dmaven.test.failure.ignore=true -Dknime.p2.repo=${P2_REPO} clean verify -P test
+                            mvn -e -X -Dmaven.test.failure.ignore=true -Dknime.p2.repo=${P2_REPO} clean verify -P test
                             rm -rf "${TEMP}"
                             if [[ -n "$XVFB_PID" ]]; then
                                 kill $XVFB_PID
