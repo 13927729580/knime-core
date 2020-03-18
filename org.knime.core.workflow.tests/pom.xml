@@ -12,6 +12,9 @@
 	<artifactId>org.knime.core.workflow.tests</artifactId>
 	<packaging>eclipse-test-plugin</packaging>
 
+	<properties>
+		<surefireArgLine>-Dswing.systemlaf=javax.swing.plaf.nimbus.NimbusLookAndFeel</surefireArgLine>
+	</properties>
 
 	<repositories>
 		<repository>
