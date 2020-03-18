@@ -472,11 +472,10 @@ public abstract class NodeDialogPane {
             m_logger.error("Error loading model settings", exRef.get());
         }
 
-        // add the flow variables tab if flow variables exist
-        addFlowVariablesTab();
         m_flowVariablesModelChanged = false;
-        if (initFlowVariablesTab(modelSettings, flowVariablesSettings) == 0) {
-            removeTab(TAB_NAME_VARIABLES);
+        if (initFlowVariablesTab(modelSettings, flowVariablesSettings) > 0) {
+            // add the flow variables tab if flow variables exist
+            addFlowVariablesTab();
         }
 
         // output memory policy and job manager (stored in NodeContainer)
